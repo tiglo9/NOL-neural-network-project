@@ -10,7 +10,6 @@ def weight_init_function(layer_size1: int, layer_size2: int):
 def bias_init_function(layer_size: int):
     return np.random.uniform(-1, 1, layer_size)
 
-
 class NeuralNetwork:
     r"""Neural network class.
     """
@@ -45,11 +44,41 @@ class NeuralNetwork:
         for bias in self.biases:
             bias.reset_grad()
 
+    def reset_adam_params(self):
+        # [c, v, beta_1^t, beta_2^t]
+        self.adam_params = [
+            [np.zeros_like(item) for item in self.weights+self.biases],
+            [np.zeros_like(item) for item in self.weights+self.biases],
+            0.9,
+            0.999
+        ]
+
     def gradient_descent(self, learning_rate):
         for weight in self.weights:
             weight.data -= learning_rate * weight.grad
         for bias in self.biases:
             bias.data -= learning_rate * bias.grad
+
+    def adam_descent(self, learning_rate, epsilon):
+        beta_1 = 0.9
+        beta_2 = 0.999
+
+        for i, item in enumerate(self.weights + self.biases):
+            self.adam_params[1][i] = beta_1*self.adam_params[1][i] + (1-beta_1)*item.grad
+            v_bar = self.adam_params[1][i]/(1-self.adam_params[2])
+            self.adam_params[0][i] = beta_2*self.adam_params[0][i] + (1-beta_2)*item.grad ** 2
+            c_bar = self.adam_params[0][i]/(1-self.adam_params[3])
+
+            item.data -= learning_rate/(np.sqrt(c_bar)+epsilon) * v_bar
+
+        self.adam_params[2] *= beta_1
+        self.adam_params[3] *= beta_2
+
+
+
+
+
+
 
     def save(self, path):
         np_weights = [weight.data for weight in self.weights]

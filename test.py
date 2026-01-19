@@ -26,7 +26,7 @@ for i in range(n):
     j = np.random.random_integers(0,60000)
     labels = np.append(labels, train_y[j])
     img = (train_images[j]/255).reshape((28,28))
-    axis[i%4, i//4].imshow(add_white_noise(img, 0.2), cmap='gray', vmin=0, vmax=1)
+    axis[i%4, i//4].imshow(add_white_noise(img, i/n), cmap='rainbow', vmin=0, vmax=1)
     axis[i%4, i//4].axis('off')
 print(labels)
 plt.show()

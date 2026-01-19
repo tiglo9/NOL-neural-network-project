@@ -66,7 +66,7 @@ neural_network = NeuralNetwork(
 
 # Set training configuration
 learning_rate = 3e-3
-epochs = 10
+epochs = 100
 
 # Do the full training algorithm
 train_losses = []
@@ -80,6 +80,9 @@ for epoch in range(1, epochs+1):
     for batch in tqdm(train_loader, desc=f"Training epoch {epoch}"):
         # Reset the gradients so that we start fresh.
         neural_network.reset_gradients()
+
+        # Also reset the adam weights
+        neural_network.reset_adam_params()
 
         # Get the images and labels from the batch
         images = np.vstack([image for (image, _) in batch])
@@ -102,7 +105,7 @@ for epoch in range(1, epochs+1):
         loss.backward()
 
         # Update the weights and biases using the chosen algorithm, in this case gradient descent.
-        neural_network.gradient_descent(learning_rate)
+        neural_network.adam_descent(learning_rate, 1e-10)
 
         # Store the loss for this batch.
         train_loss += loss.data
