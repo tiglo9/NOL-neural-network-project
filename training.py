@@ -10,18 +10,65 @@ from loss_functions import mse_loss
 from models import NeuralNetwork
 from supplementary import Value, load_mnist
 
+
 # Set printing precision for NumPy so that we don't get needlessly many digits in our answers.
 np.set_printoptions(precision=2)
 
-# Get images and corresponding labels from the (fashion-)mnist dataset
-data_dir = Path(__file__).resolve().parent / "data"
-train_images, train_y = load_mnist(data_dir, kind='train')
-test_images, test_y = load_mnist(data_dir, kind='t10k')
+# ============================================================
+#                    NOISE CONFIGURATION
+# ============================================================
 
-# Reshape each of the 60 000 images from a 28x28 image into a 784 vector.
-# Rescale the values in the 784 to be in [0,1] instead of [0, 255].
+# Whether to use noisy data during training/testing
+train_on_noise = True
+test_on_noise = True
+
+# Noise settings: (p, s)
+# p = percentage of images in the dataset affected
+# s = noise strength / scale (standard deviation of the gaussian white noise)
+train_noise_settings = (100, 0.3)
+test_noise_settings  = (100, 0.4)
+
+# Path to the MNIST / Fashion-MNIST data directory
+data_dir = Path(__file__).resolve().parent / "data"
+
+# ============================================================
+#                LOAD AND PREPROCESS TRAIN DATA
+# ============================================================
+from noise import add_noise_to_mnist
+
+# Load training data
+train_images, train_y = load_mnist(data_dir, kind='train')
+
+# Reshape: (60000, 28, 28) -> (60000, 784)
+# Normalize: [0, 255] -> [0, 1]
 train_images = train_images.reshape(60_000, 784) / 255
-test_images = test_images.reshape(10_000, 784) / 255
+
+# Optionally add noise to training data
+if train_on_noise:
+    p, s = train_noise_settings
+    train_images, train_y, _ = add_noise_to_mnist(train_images, train_y, p, s)
+
+
+# ============================================================
+#                LOAD AND PREPROCESS TEST DATA
+# ============================================================
+
+if not test_on_noise:
+    # Standard clean test set
+    test_images, test_y = load_mnist(data_dir, kind='t10k')
+    test_images = test_images.reshape(10_000, 784) / 255
+
+else:
+    # Pre-generated noisy test set
+    p, s = test_noise_settings
+
+    test_images = np.load(
+        f"data/custom_test_sets/noisy_mnist_t10k_p{p}_s{s}_images.npz"
+    )["images"]
+
+    test_y = np.load(
+        f"data/custom_test_sets/noisy_mnist_t10k_p{p}_s{s}_labels.npz"
+    )["labels"][:, 0]
 
 # Labels are stored as numbers. For neural network training, we want one-hot encoding, i.e. the label should be a vector
 # of 10 long with a one in the index corresponding to the digit.
@@ -66,7 +113,7 @@ neural_network = NeuralNetwork(
 
 # Set training configuration
 learning_rate = 3e-3
-epochs = 100
+epochs = 3
 
 # Do the full training algorithm
 train_losses = []
