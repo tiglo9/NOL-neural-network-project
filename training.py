@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm  # gives progression bars when running code
 
-from activation_functions import logi, softmax
+from activation_functions import logi, softmax, relu
 from data_loader import DataLoader
 from loss_functions import mse_loss
 from models import NeuralNetwork
