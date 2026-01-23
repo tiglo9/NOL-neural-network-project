@@ -136,6 +136,7 @@ def test_on_mult_data(neural_network, p=None, s=None, epoch=1):
     
     checked_clean_check = False
     clean_accuracy = None
+    clean_loss = None
     points = []
 
     for p_val in p:
@@ -190,33 +191,37 @@ def test_on_mult_data(neural_network, p=None, s=None, epoch=1):
             # Cache the clean accuracy for reuse
             if (p_val == 0 or s_val == 0) and clean_accuracy is None:
                 clean_accuracy = test_accuracy
+                clean_loss = test_loss
 
             # Fill in points
             if p_val == 0:
                 # Accuracy is the same along the entire p=0 line
                 for s_fill in s:
-                    points.append((0, s_fill, clean_accuracy))
+                    points.append((0, s_fill, clean_accuracy, clean_loss))
             elif s_val == 0:
                 # Accuracy is the same along the entire s=0 line
                 for p_fill in p:
-                    points.append((p_fill, 0, clean_accuracy))
+                    points.append((p_fill, 0, clean_accuracy, clean_loss))
             else:
-                points.append((p_val, s_val, test_accuracy))
+                points.append((p_val, s_val, test_accuracy, test_loss))
 
             print(f"Test loss and accuracy for p={p_val}, s={s_val}")
             print(f"test loss: {test_loss:.4f}")
             print(f"test accuracy: {test_accuracy:.4f}\n")
 
     # Convert to numpy array for plotting
-    points_array = np.array(points)
+    points_array = np.array(list(set(points)))
     p_vals = points_array[:, 0]
     s_vals = points_array[:, 1]
     test_accs = points_array[:, 2]
+    test_loss = points_array[:, 3]
 
     mean_test_acc = np.mean(test_accs)
+    mean_test_loss = np.mean(test_loss)
 
     print(f"Average test loss and accuracy over all p and s")
-    print(f"average test accuracy: {mean_test_acc:.4f}\n")
+    print(f"average test accuracy: {mean_test_acc:.4f}")
+    print(f"average test accuracy: {mean_test_loss:.4f}\n")
 
     # Create grid for interpolation
     grid_p = np.linspace(0, 100, 100)
@@ -234,3 +239,173 @@ def test_on_mult_data(neural_network, p=None, s=None, epoch=1):
     plt.show()
 
     return points_array
+
+
+
+
+def compare_networks(p_vals, s_vals, loss_vals, accuracy_vals):
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from scipy.interpolate import griddata
+
+    # Create a grid for interpolation
+    p_grid = np.linspace(min(p_vals), max(p_vals), 200)
+    s_grid = np.linspace(min(s_vals), max(s_vals), 200)
+    P, S = np.meshgrid(p_grid, s_grid)
+
+    # Interpolate values onto the grid
+    grid_accuracy = griddata((p_vals, s_vals), accuracy_vals, (P, S), method='cubic')
+    grid_loss = griddata((p_vals, s_vals), loss_vals, (P, S), method='cubic')
+
+    # Set fixed color limits
+    acc_min, acc_max = 0, 1           # Accuracy between 0 and 1
+    loss_min, loss_max = np.min(loss_vals), np.max(loss_vals)  # or set fixed range if desired
+
+    # Accuracy heatmap
+    plt.figure(figsize=(8, 6))
+    plt.imshow(grid_accuracy, extent=(min(p_vals), max(p_vals), min(s_vals), max(s_vals)), 
+               origin='lower', aspect='auto', cmap='viridis', vmin=acc_min, vmax=acc_max)
+    plt.colorbar(label='Test Accuracy')
+    plt.xlabel('p')
+    plt.ylabel('s')
+    plt.title('Test Accuracy Heatmap')
+    plt.show()
+
+    # Loss heatmap
+    plt.figure(figsize=(8, 6))
+    plt.imshow(grid_loss, extent=(min(p_vals), max(p_vals), min(s_vals), max(s_vals)), 
+               origin='lower', aspect='auto', cmap='magma', vmin=loss_min, vmax=loss_max)
+    plt.colorbar(label='Test Loss')
+    plt.xlabel('p')
+    plt.ylabel('s')
+    plt.title('Test Loss Heatmap')
+    plt.show()
+
+
+def train_network(neural_network, train_loader, train_dataset_size, validation_loader, validation_dataset_size, learning_rate, epochs):
+    from pathlib import Path
+
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from tqdm import tqdm  # gives progression bars when running code
+
+    from loss_functions import mse_loss
+    from models import NeuralNetwork
+
+    # Set training configuration
+    learning_rate = learning_rate
+    epochs = epochs
+
+    # Do the full training algorithm
+    train_losses = []
+    validation_losses = []
+    train_accuracies = []
+    validation_accuracies = []
+    for epoch in range(1, epochs+1):
+        # (Re)set the training loss for this epoch.
+        train_loss = 0.0
+        correctly_classified = 0
+        for batch in tqdm(train_loader, desc=f"Training epoch {epoch}"):
+            # Reset the gradients so that we start fresh.
+            neural_network.reset_gradients()
+
+            # Also reset the adam weights
+            neural_network.reset_adam_params()
+
+            # Get the images and labels from the batch
+            images = np.vstack([image for (image, _) in batch])
+            labels = np.vstack([label for (_, label) in batch])
+
+            # Wrap images and labels in a Value class.
+            images = Value(images, expr="X")
+            labels = Value(labels, expr="Y")
+
+            # Compute what the model says is the label.
+            output = neural_network(images)
+
+            # Compute the loss for this batch.
+            loss = mse_loss(
+                output,
+                labels
+            )
+
+            # Do backpropagation
+            loss.backward()
+
+            # Update the weights and biases using the chosen algorithm, in this case gradient descent.
+            neural_network.adam_descent(learning_rate, 1e-10)
+
+            # Store the loss for this batch.
+            train_loss += loss.data
+
+            # Store accuracies for extra interpretability
+            true_classification = np.argmax(
+                labels.data,
+                axis=1
+            )
+            predicted_classification = np.argmax(
+                output.data,
+                axis=1
+            )
+            correctly_classified += np.sum(true_classification == predicted_classification)
+
+        # Store the loss and average accuracy for the entire epoch.
+        train_losses.append(train_loss)
+        train_accuracies.append(correctly_classified / train_dataset_size)
+
+        print(f"Accuracy: {train_accuracies[-1]}")
+        print(f"Loss: {train_loss}")
+        print("")
+
+        validation_loss = 0.0
+        correctly_classified = 0
+        for batch in tqdm(validation_loader, desc=f"Validation epoch {epoch}"):
+            # Get the images and labels from the batch
+            images = np.vstack([image for (image, _) in batch])
+            labels = np.vstack([label for (_, label) in batch])
+
+            # Wrap images and labels in a Value class.
+            images = Value(images, expr="X")
+            labels = Value(labels, expr="Y")
+
+            # Compute what the model says is the label.
+            output = neural_network(images)
+
+            # Compute the loss for this batch.
+            loss = mse_loss(
+                output,
+                labels
+            )
+
+            # Store the loss for this batch.
+            validation_loss += loss.data
+
+            # Store accuracies for extra interpretability
+            true_classification = np.argmax(
+                labels.data,
+                axis=1
+            )
+            predicted_classification = np.argmax(
+                output.data,
+                axis=1
+            )
+            correctly_classified += np.sum(true_classification == predicted_classification)
+
+        validation_losses.append(validation_loss)
+        validation_accuracies.append(correctly_classified / validation_dataset_size)
+
+        print(f"Accuracy: {validation_accuracies[-1]}")
+        print(f"Loss: {validation_loss}")
+        print("")
+
+    print(" === SUMMARY === ")
+    print(" --- training --- ")
+    print(f"Accuracies: {train_accuracies}")
+    print(f"Losses: {train_losses}")
+    print("")
+    print(" --- validation --- ")
+    print(f"Accuracies: {validation_accuracies}")
+    print(f"Losses: {validation_losses}")
+    print("")
+
+    return train_accuracies, train_losses, validation_accuracies, validation_losses

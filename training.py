@@ -8,7 +8,7 @@ from activation_functions import logi, softmax, relu
 from data_loader import DataLoader
 from loss_functions import mse_loss
 from models import NeuralNetwork
-from supplementary import Value, load_mnist, test_on_mult_data
+from supplementary import Value, load_mnist, test_on_mult_data, train_network
 
 
 # Set printing precision for NumPy so that we don't get needlessly many digits in our answers.
@@ -25,8 +25,8 @@ test_on_noise = True
 # Noise settings: (p, s)
 # p = percentage of images in the dataset affected
 # s = noise strength / scale (standard deviation of the gaussian white noise)
-train_noise_settings = (100, 0.6)
-test_noise_settings  = (100, 0.4)
+train_noise_settings = (0, 0)
+test_noise_settings  = (100, 0.2)
 
 # Path to the MNIST / Fashion-MNIST data directory
 data_dir = Path(__file__).resolve().parent / "data"
@@ -35,7 +35,7 @@ data_dir = Path(__file__).resolve().parent / "data"
 # ============================================================
 #                TEST SETTINGS
 # ============================================================
-test_on_multiple = True
+test_on_multiple = False
 test_on_mult_p = [0, 25, 50, 75, 100]
 test_on_mult_s = [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4]
 
@@ -78,6 +78,11 @@ if not test_on_multiple:
         test_y = np.load(
             f"data/custom_test_sets/noisy_mnist_t10k_p{p}_s{s}_labels.npz"
         )["labels"][:, 0]
+
+
+# ============================================================
+#                           Training
+# ============================================================
 
 # Labels are stored as numbers. For neural network training, we want one-hot encoding, i.e. the label should be a vector
 # of 10 long with a one in the index corresponding to the digit.
@@ -123,121 +128,124 @@ neural_network = NeuralNetwork(
 #   activation_functions=[logi, logi, logi, softmax]
 # ).load("path/to/some/folder")
 
+
 # Set training configuration
 learning_rate = 3e-3
-epochs = 5
+epochs = 2
 
-# Do the full training algorithm
-train_losses = []
-validation_losses = []
-train_accuracies = []
-validation_accuracies = []
-for epoch in range(1, epochs+1):
-    # (Re)set the training loss for this epoch.
-    train_loss = 0.0
-    correctly_classified = 0
-    for batch in tqdm(train_loader, desc=f"Training epoch {epoch}"):
-        # Reset the gradients so that we start fresh.
-        neural_network.reset_gradients()
+train_accuracies, train_losses, validation_accuracies, validation_losses = train_network(neural_network, train_loader, train_dataset_size, validation_loader, validation_dataset_size, learning_rate, epochs)
 
-        # Also reset the adam weights
-        neural_network.reset_adam_params()
+# # Do the full training algorithm
+# train_losses = []
+# validation_losses = []
+# train_accuracies = []
+# validation_accuracies = []
+# for epoch in range(1, epochs+1):
+#     # (Re)set the training loss for this epoch.
+#     train_loss = 0.0
+#     correctly_classified = 0
+#     for batch in tqdm(train_loader, desc=f"Training epoch {epoch}"):
+#         # Reset the gradients so that we start fresh.
+#         neural_network.reset_gradients()
 
-        # Get the images and labels from the batch
-        images = np.vstack([image for (image, _) in batch])
-        labels = np.vstack([label for (_, label) in batch])
+#         # Also reset the adam weights
+#         neural_network.reset_adam_params()
 
-        # Wrap images and labels in a Value class.
-        images = Value(images, expr="X")
-        labels = Value(labels, expr="Y")
+#         # Get the images and labels from the batch
+#         images = np.vstack([image for (image, _) in batch])
+#         labels = np.vstack([label for (_, label) in batch])
 
-        # Compute what the model says is the label.
-        output = neural_network(images)
+#         # Wrap images and labels in a Value class.
+#         images = Value(images, expr="X")
+#         labels = Value(labels, expr="Y")
 
-        # Compute the loss for this batch.
-        loss = mse_loss(
-            output,
-            labels
-        )
+#         # Compute what the model says is the label.
+#         output = neural_network(images)
 
-        # Do backpropagation
-        loss.backward()
+#         # Compute the loss for this batch.
+#         loss = mse_loss(
+#             output,
+#             labels
+#         )
 
-        # Update the weights and biases using the chosen algorithm, in this case gradient descent.
-        neural_network.adam_descent(learning_rate, 1e-10)
+#         # Do backpropagation
+#         loss.backward()
 
-        # Store the loss for this batch.
-        train_loss += loss.data
+#         # Update the weights and biases using the chosen algorithm, in this case gradient descent.
+#         neural_network.adam_descent(learning_rate, 1e-10)
 
-        # Store accuracies for extra interpretability
-        true_classification = np.argmax(
-            labels.data,
-            axis=1
-        )
-        predicted_classification = np.argmax(
-            output.data,
-            axis=1
-        )
-        correctly_classified += np.sum(true_classification == predicted_classification)
+#         # Store the loss for this batch.
+#         train_loss += loss.data
 
-    # Store the loss and average accuracy for the entire epoch.
-    train_losses.append(train_loss)
-    train_accuracies.append(correctly_classified / train_dataset_size)
+#         # Store accuracies for extra interpretability
+#         true_classification = np.argmax(
+#             labels.data,
+#             axis=1
+#         )
+#         predicted_classification = np.argmax(
+#             output.data,
+#             axis=1
+#         )
+#         correctly_classified += np.sum(true_classification == predicted_classification)
 
-    print(f"Accuracy: {train_accuracies[-1]}")
-    print(f"Loss: {train_loss}")
-    print("")
+#     # Store the loss and average accuracy for the entire epoch.
+#     train_losses.append(train_loss)
+#     train_accuracies.append(correctly_classified / train_dataset_size)
 
-    validation_loss = 0.0
-    correctly_classified = 0
-    for batch in tqdm(validation_loader, desc=f"Validation epoch {epoch}"):
-        # Get the images and labels from the batch
-        images = np.vstack([image for (image, _) in batch])
-        labels = np.vstack([label for (_, label) in batch])
+#     print(f"Accuracy: {train_accuracies[-1]}")
+#     print(f"Loss: {train_loss}")
+#     print("")
 
-        # Wrap images and labels in a Value class.
-        images = Value(images, expr="X")
-        labels = Value(labels, expr="Y")
+#     validation_loss = 0.0
+#     correctly_classified = 0
+#     for batch in tqdm(validation_loader, desc=f"Validation epoch {epoch}"):
+#         # Get the images and labels from the batch
+#         images = np.vstack([image for (image, _) in batch])
+#         labels = np.vstack([label for (_, label) in batch])
 
-        # Compute what the model says is the label.
-        output = neural_network(images)
+#         # Wrap images and labels in a Value class.
+#         images = Value(images, expr="X")
+#         labels = Value(labels, expr="Y")
 
-        # Compute the loss for this batch.
-        loss = mse_loss(
-            output,
-            labels
-        )
+#         # Compute what the model says is the label.
+#         output = neural_network(images)
 
-        # Store the loss for this batch.
-        validation_loss += loss.data
+#         # Compute the loss for this batch.
+#         loss = mse_loss(
+#             output,
+#             labels
+#         )
 
-        # Store accuracies for extra interpretability
-        true_classification = np.argmax(
-            labels.data,
-            axis=1
-        )
-        predicted_classification = np.argmax(
-            output.data,
-            axis=1
-        )
-        correctly_classified += np.sum(true_classification == predicted_classification)
+#         # Store the loss for this batch.
+#         validation_loss += loss.data
 
-    validation_losses.append(validation_loss)
-    validation_accuracies.append(correctly_classified / validation_dataset_size)
+#         # Store accuracies for extra interpretability
+#         true_classification = np.argmax(
+#             labels.data,
+#             axis=1
+#         )
+#         predicted_classification = np.argmax(
+#             output.data,
+#             axis=1
+#         )
+#         correctly_classified += np.sum(true_classification == predicted_classification)
 
-    print(f"Accuracy: {validation_accuracies[-1]}")
-    print(f"Loss: {validation_loss}")
-    print("")
+#     validation_losses.append(validation_loss)
+#     validation_accuracies.append(correctly_classified / validation_dataset_size)
 
-print(" === SUMMARY === ")
-print(" --- training --- ")
-print(f"Accuracies: {train_accuracies}")
-print(f"Losses: {train_losses}")
-print("")
-print(" --- validation --- ")
-print(f"Accuracies: {validation_accuracies}")
-print(f"Losses: {validation_losses}")
-print("")
+#     print(f"Accuracy: {validation_accuracies[-1]}")
+#     print(f"Loss: {validation_loss}")
+#     print("")
+
+# print(" === SUMMARY === ")
+# print(" --- training --- ")
+# print(f"Accuracies: {train_accuracies}")
+# print(f"Losses: {train_losses}")
+# print("")
+# print(" --- validation --- ")
+# print(f"Accuracies: {validation_accuracies}")
+# print(f"Losses: {validation_losses}")
+# print("")
 
 # Plot of train vs test losses on the same axes
 plt.figure()
@@ -288,12 +296,13 @@ ax2.set_ylabel("Test accuracy", color=color)
 ax2.tick_params(axis='y', labelcolor=color)
 
 figure.tight_layout()
+plt.show()
 
 if not test_on_multiple:
     # Compute the test loss and accuracies on the same axes
     test_loss = 0.0
     correctly_classified = 0
-    for batch in tqdm(test_loader, desc=f"Testing epoch {epoch}"):
+    for batch in tqdm(test_loader, desc=f"Testing epochs {epochs}"):
         # Get the images and labels from the batch
         images = np.vstack([image for (image, _) in batch])
         labels = np.vstack([label for (_, label) in batch])
@@ -328,37 +337,52 @@ if not test_on_multiple:
     print(f"test loss:      {test_loss}")
     print(f"test accuraccy: {correctly_classified / test_dataset_size}")
 else:
-    points_array = test_on_mult_data(neural_network, p = test_on_mult_p, s = test_on_mult_s, epoch = epoch)
-    # print(points_array)
+    points_array = test_on_mult_data(neural_network, p = test_on_mult_p, s = test_on_mult_s, epoch = epochs)
+    print(points_array.shape)
+    print(points_array)
+    if train_on_noise:
+        p, s, acc, loss = points_array.T
 
-if not test_on_mult_data:
-    # We take a random starting point for 10 subsequent images we want to take a greater look at.
-    r = np.random.randint(0, 9_990)
+        mean_acc = np.mean(acc)
+        mean_loss = np.mean(loss)
 
-    # We go over 10 images starting with r, plot them and show the prediction the network makes next to them.
-    plt.figure()
-    for i in range(9):
-        plt.rcParams["figure.figsize"] = (15, 10)
-        plt.subplot(3, 3, 1 + i)
-        image = Value(np.array(test_images[r + i]), "x")
-        plt.imshow(image.data.reshape(28, 28), cmap=plt.get_cmap('gray'))
-        plt.text(-5, 45,
-                f'True value:\n{test_labels[r + i]}: {test_y[r + i]}\n'
-                f'Output:\n'
-                f'[{neural_network(image)[0]:.2f} '  # needs __getitem__ method in Value class!
-                f'{neural_network(image)[1]:.2f} '
-                f'{neural_network(image)[2]:.2f} '
-                f'{neural_network(image)[3]:.2f} '
-                f'{neural_network(image)[4]:.2f}\n'
-                f'{neural_network(image)[5]:.2f} '
-                f'{neural_network(image)[6]:.2f} '
-                f'{neural_network(image)[7]:.2f} '
-                f'{neural_network(image)[8]:.2f} '
-                f'{neural_network(image)[9]:.2f}]: {np.argmax(neural_network(image).data)}')
+        result_info = (train_noise_settings[0], train_noise_settings[1], mean_acc, mean_loss)
+        print(result_info)
+    else:
+        p, s, acc, loss = points_array.T
 
-    plt.subplots_adjust(hspace=.8)
-    plt.show()
+        mean_acc = np.mean(acc)
+        mean_loss = np.mean(loss)
 
-    
+        result_info = (0, 0, mean_acc, mean_loss)
+
+# We take a random starting point for 10 subsequent images we want to take a greater look at.
+r = np.random.randint(0, 9_990)
+
+# We go over 10 images starting with r, plot them and show the prediction the network makes next to them.
+plt.figure()
+for i in range(9):
+    plt.rcParams["figure.figsize"] = (15, 10)
+    plt.subplot(3, 3, 1 + i)
+    image = Value(np.array(test_images[r + i]), "x")
+    plt.imshow(image.data.reshape(28, 28), cmap=plt.get_cmap('gray'))
+    plt.text(-5, 45,
+            f'True value:\n{test_labels[r + i]}: {test_y[r + i]}\n'
+            f'Output:\n'
+            f'[{neural_network(image)[0]:.2f} '  # needs __getitem__ method in Value class!
+            f'{neural_network(image)[1]:.2f} '
+            f'{neural_network(image)[2]:.2f} '
+            f'{neural_network(image)[3]:.2f} '
+            f'{neural_network(image)[4]:.2f}\n'
+            f'{neural_network(image)[5]:.2f} '
+            f'{neural_network(image)[6]:.2f} '
+            f'{neural_network(image)[7]:.2f} '
+            f'{neural_network(image)[8]:.2f} '
+            f'{neural_network(image)[9]:.2f}]: {np.argmax(neural_network(image).data)}')
+
+plt.subplots_adjust(hspace=.8)
+plt.show()
+
+
 # Save the parameters of the final network to disk
 # neural_network.save("some_folder")
