@@ -328,7 +328,8 @@ if not test_on_multiple:
     print(f"test loss:      {test_loss}")
     print(f"test accuraccy: {correctly_classified / test_dataset_size}")
 else:
-    test_on_mult_data(neural_network, p = test_on_mult_p, s = test_on_mult_s, epoch = epoch)
+    points_array = test_on_mult_data(neural_network, p = test_on_mult_p, s = test_on_mult_s, epoch = epoch)
+    # print(points_array)
 
 if not test_on_mult_data:
     # We take a random starting point for 10 subsequent images we want to take a greater look at.
@@ -358,5 +359,6 @@ if not test_on_mult_data:
     plt.subplots_adjust(hspace=.8)
     plt.show()
 
-    # Save the parameters of the final network to disk
-    # neural_network.save("some_folder")
+    
+# Save the parameters of the final network to disk
+# neural_network.save("some_folder")

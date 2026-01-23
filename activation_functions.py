@@ -1,5 +1,5 @@
 import numpy as np
-
+import scipy as sp
 from supplementary import Value
 
 
@@ -35,11 +35,13 @@ def logi(x: Value) -> Value:
 
 
 def softmax(x: Value) -> Value:
-    exp_x = np.exp(x.data)
-    if x.data.ndim == 2:
-        data = exp_x / (np.sum(exp_x, keepdims=True, axis=1) + 0.000001)
-    else:
-        data = exp_x / np.sum(exp_x)
+    # exp_x = np.exp(x.data)
+    # if x.data.ndim == 2:
+    #     data = exp_x / (np.sum(exp_x, keepdims=True, axis=1) + 0.000001)
+    # else:
+    #     data = exp_x / np.sum(exp_x)
+
+    data = sp.special.softmax(x.data)
     result = Value(data, f"softmax({x.expr})", (x,))
 
     def _backward_gradient_step():
