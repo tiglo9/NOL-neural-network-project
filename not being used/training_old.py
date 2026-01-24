@@ -128,6 +128,40 @@ neural_network = NeuralNetwork(
 #   activation_functions=[logi, logi, logi, softmax]
 # ).load("path/to/some/folder")
 
+#================================================
+#         GRID SEARCH FOR LEARNING RATE
+#================================================
+
+grid_search = False
+
+if grid_search:
+    import threading
+    import copy
+    networklist = []
+    threadlist = []
+    for learning_rate in (0.003, 0.002, 0.001, 0.005):#np.arange(1e-4,5e-3,1e-4):
+        networklist.append(copy.deepcopy(neural_network))
+        threadlist.append(threading.Thread(target=train_network, args=(
+            networklist[-1],
+            train_loader,
+            train_dataset_size,
+            validation_loader,
+            validation_dataset_size,
+            learning_rate,
+            1
+            )))
+        threadlist[-1].start()
+# import time
+# while True:
+#     time.sleep(1)
+#     if not any(thread.is_alive() for thread in threadlist):
+#         break
+#################################################################
+# test networks to see accuracy (i don't do that in the thread because that would be more difficult)
+#################################################################
+    
+
+# raise("stop")
 
 # Set training configuration
 learning_rate = 3e-3

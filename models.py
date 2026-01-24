@@ -74,12 +74,6 @@ class NeuralNetwork:
         self.adam_params[2] *= beta_1
         self.adam_params[3] *= beta_2
 
-
-
-
-
-
-
     def save(self, path):
         np_weights = [weight.data for weight in self.weights]
         np_biases = [bias.data for bias in self.biases]
