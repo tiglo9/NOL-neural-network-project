@@ -1,0 +1,11 @@
+=== GRID SEARCH RESULTS ===
+LR= 1e-5    | Train Acc=0.8205 | Val Acc=0.8194 | Test Acc=0.7438
+LR= 3e-5    | Train Acc=0.8521 | Val Acc=0.8422 | Test Acc=0.7672
+LR= 0.0001  | Train Acc=0.8845 | Val Acc=0.8640 | Test Acc=0.7808
+LR= 0.9e-04 | Train Acc=0.8875 | Val Acc=0.8714 | Test Acc=0.7870
+LR= 0.0002  | Train Acc=0.8970 | Val Acc=0.8736 | Test Acc=0.7911
+LR= 0.0003  | Train Acc=0.9072 | Val Acc=0.8728 | Test Acc=0.7864
+LR= 0.0004  | Train Acc=0.9191 | Val Acc=0.8804 | Test Acc=0.7871
+LR= 0.0005  | Train Acc=0.9257 | Val Acc=0.8812 | Test Acc=0.7707
+LR= 0.0006  | Train Acc=0.9293 | Val Acc=0.8832 | Test Acc=0.7861
+LR= 0.0010  | Train Acc=0.9044 | Val Acc=0.8764 | Test Acc=0.7786

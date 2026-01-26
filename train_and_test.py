@@ -229,7 +229,8 @@ def grid_worker(args):
         val_loader,
         val_size,
         lr,
-        epochs=1
+        epochs=1,
+        plot_heatmap=False
     )
 
     test_results = test_network(
@@ -246,4 +247,163 @@ def grid_worker(args):
         "test_acc": test_results["accuracy"],
     }
 
+def train_and_test_p_s(path, p, s, learning_rate = 0.0002, epochs = 20):
+    print(f"\n--- Training with noise: p={p}, s={s} ---")
+
+    # Reload clean MNIST every run
+    train_images, train_y = load_mnist(data_dir, kind="train")
+    train_images = train_images.reshape(60_000, 784) / 255
+
+    # Apply noise
+    train_images, train_y, _ = add_noise_to_mnist(train_images, train_y, p, s)
+
+    train_labels = np.zeros((60_000, 10))
+    train_labels[np.arange(60_000), train_y] = 1
+
+    # Validation split
+    validation_subset = 5000
+    validation_images = train_images[:validation_subset]
+    validation_labels = train_labels[:validation_subset]
+    train_images = train_images[validation_subset:]
+    train_labels = train_labels[validation_subset:]
+
+    train_dataset = list(zip(train_images, train_labels))
+    validation_dataset = list(zip(validation_images, validation_labels))
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    validation_loader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=True)
+
+    train_dataset_size = len(train_dataset)
+    validation_dataset_size = len(validation_dataset)
+
+    # Fresh network each time
+    net = copy.deepcopy(neural_network)
+
+    # Train
+    train_acc, train_loss, val_acc, val_loss = train_network(
+        net,
+        train_loader,
+        train_dataset_size,
+        validation_loader,
+        validation_dataset_size,
+        learning_rate=learning_rate,
+        epochs=epochs
+    )
+
+
+    # Loss: single-axis
+    plt.figure()
+    plt.title(f"Loss: Train vs Validation (LR={lr})")
+    plt.semilogy(np.arange(1, ep+1), train_loss, label="Train")
+    plt.semilogy(np.arange(1, ep+1), val_loss, label="Validation")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f"{path}/p={p}/plots/loss_single_axis_p={p}_s={s}.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+
+    # Loss: dual-axis
+    fig_loss, ax1 = plt.subplots()
+    ax1.set_title(f"Loss: Train vs Validation (dual-axis) LR={lr}")
+    color = "tab:blue"
+    ax1.semilogy(np.arange(1, ep+1), train_loss, color=color, label="Train")
+    ax1.set_ylabel("Train Loss", color=color)
+    ax1.tick_params(axis='y', labelcolor=color)
+
+    ax2 = ax1.twinx()
+    color = "tab:orange"
+    ax2.semilogy(np.arange(1, ep+1), val_loss, color=color, label="Validation")
+    ax2.set_ylabel("Validation Loss", color=color)
+    ax2.tick_params(axis='y', labelcolor=color)
+
+    fig_loss.tight_layout()
+    fig_loss.savefig(f"{path}/p={p}/plots/loss_dual_axis_p={p}_s={s}.png", dpi=300, bbox_inches="tight")
+    plt.close(fig_loss)
+
+
+    # Accuracy: single-axis
+    plt.figure()
+    plt.title(f"Accuracy: Train vs Validation (p={p} and s={s})")
+    plt.plot(np.arange(1, ep+1), train_acc, label="Train")
+    plt.plot(np.arange(1, ep+1), val_acc, label="Validation")
+    plt.xlabel("Epochs")
+    plt.ylabel("Accuracy")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f"{path}/p={p}/plots/accuracy_single_axis_p_{p}_s={s}.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+
+    # Accuracy: dual-axis
+    fig_acc, ax1 = plt.subplots()
+    ax1.set_title(f"Accuracy: Train vs Validation (dual-axis) p={p} and s={s}")
+    color = "tab:blue"
+    ax1.plot(np.arange(1, ep+1), train_acc, color=color, label="Train")
+    ax1.set_ylabel("Train Accuracy", color=color)
+    ax1.tick_params(axis='y', labelcolor=color)
+
+    ax2 = ax1.twinx()
+    color = "tab:orange"
+    ax2.plot(np.arange(1, ep+1), val_acc, color=color, label="Validation")
+    ax2.set_ylabel("Validation Accuracy", color=color)
+    ax2.tick_params(axis='y', labelcolor=color)
+
+    fig_acc.tight_layout()
+    fig_acc.savefig(f"{path}/p={p}/plots/accuracy_dual_axis_lr_p={p}_s={s}.png", dpi=300, bbox_inches="tight")
+    plt.close(fig_acc)
+
+
+    # Test on your multiple-noise benchmark
+    test_results = test_network(
+        net,
+        test_on_multiple=True,
+        p_list=test_on_mult_p,
+        s_list=test_on_mult_s,
+        data_dir=str(data_dir),
+        epoch=epochs
+    )   
+
+    test_points_array = test_results["points"]
+    test_mean_accuracy = test_results["mean_accuracy"]
+    test_mean_accuracy = test_results["mean_loss"]
+
+    p_vals = test_points_array[:, 0]
+    s_vals = test_points_array[:, 1]
+    accs   = test_points_array[:, 2]
+
+    grid_p = np.linspace(min(p_vals), max(p_vals), 100)
+    grid_s = np.linspace(min(s_vals), max(s_vals), 40)
+    P, S = np.meshgrid(grid_p, grid_s)
+
+    grid_acc = griddata((p_vals, s_vals), accs, (P, S), method="cubic")
+
+    plt.figure(figsize=(8, 6))
+    plt.imshow(grid_acc, extent=(min(p_vals), max(p_vals), min(s_vals), max(s_vals)),
+                origin="lower", aspect="auto", cmap="viridis")
+    plt.colorbar(label="Test Accuracy")
+    plt.xlabel("p")
+    plt.ylabel("s")
+    plt.title("Test Accuracy Heatmap")
+    plt.savefig(f"{path}/p={p}/plots/Test_accuracy_heatmap_p={p}_s={s}")
+    plt.close()
+
+    with open(f"{path}/p={p}/test_results.txt", "a") as f:
+        f.write("Test Results\n=======================================================\n")
+        for p, s, acc, loss in test_results["points"]:
+            f.write(
+                f"[TEST] p={int(p)}, s={s} | acc={acc:.4f}, loss={loss:.4f}\n"
+            )
+        f.write(f"=======================================================\n\n")
+
+    net.save(f"{path}/p={p}")
+
+    noise_results.append({
+        "p": p,
+        "s": s,
+        "points": test_points_array,
+        "test_mean_accuracy": test_mean_accuracy,
+        "test_mean_accuracy": test_mean_accuracy
+    })
 

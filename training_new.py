@@ -29,10 +29,14 @@ test_on_mult_s = [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4]
 data_dir = Path(__file__).resolve().parent / "data"
 
 batch_size = 32
-learning_rate = 3e-3
-epochs = 2
+learning_rate = 0.0002 
+epochs = 20
 
+noise_grid_search = True
 grid_search = False  # toggle grid search
+
+p_list = np.arange(0, 100, 5)
+s_list = np.arange(0, 0.6, 0.03)
 
 # ============================================================
 #                LOAD AND PREPROCESS TRAIN DATA
@@ -105,10 +109,11 @@ if __name__ == "__main__":
 
     if grid_search:
         print("=== Running GRID SEARCH sequentially ===")
-        learning_rates = [0.003, 0.002, 0.001, 0.005]
+        learning_rates = [9e-5]
+        epochs = [15]
         results = []
 
-        for lr in learning_rates:
+        for lr, ep in zip(learning_rates, epochs):
             print(f"\n--- Training network with learning rate {lr} ---")
             net_copy = copy.deepcopy(neural_network)
 
@@ -120,8 +125,88 @@ if __name__ == "__main__":
                 validation_loader,
                 validation_dataset_size,
                 learning_rate=lr,
-                epochs=1  # shorter for grid search
+                epochs=ep  # shorter for grid search
             )
+
+            with open("grid_search_results.txt", "a") as f:
+                f.write(f"\nLR: {lr}, Epochs: {ep}\n")
+                f.write(f"=======================================================\n")
+                for epoch in range(1, ep + 1):
+                    f.write(
+                        f"Epoch {epoch}: "
+                        f"Train Acc: {train_acc[epoch-1]:.4f}, "
+                        f"Train Loss: {train_loss[epoch-1]:.4f}, "
+                        f"Val Acc: {val_acc[epoch-1]:.4f}, "
+                        f"Val Loss: {val_loss[epoch-1]:.4f}\n"
+                    )
+                f.write("=======================================================\n")
+
+
+            # ---------- PLOTTING ----------
+
+            # Loss: single-axis
+            plt.figure()
+            plt.title(f"Loss: Train vs Validation (LR={lr})")
+            plt.semilogy(np.arange(1, ep+1), train_loss, label="Train")
+            plt.semilogy(np.arange(1, ep+1), val_loss, label="Validation")
+            plt.xlabel("Epochs")
+            plt.ylabel("Loss")
+            plt.legend()
+            plt.grid(True)
+            plt.savefig(f"loss_single_axis_lr_{lr}.png", dpi=300, bbox_inches="tight")
+            plt.close()
+
+
+            # Loss: dual-axis
+            fig_loss, ax1 = plt.subplots()
+            ax1.set_title(f"Loss: Train vs Validation (dual-axis) LR={lr}")
+            color = "tab:blue"
+            ax1.semilogy(np.arange(1, ep+1), train_loss, color=color, label="Train")
+            ax1.set_ylabel("Train Loss", color=color)
+            ax1.tick_params(axis='y', labelcolor=color)
+
+            ax2 = ax1.twinx()
+            color = "tab:orange"
+            ax2.semilogy(np.arange(1, ep+1), val_loss, color=color, label="Validation")
+            ax2.set_ylabel("Validation Loss", color=color)
+            ax2.tick_params(axis='y', labelcolor=color)
+
+            fig_loss.tight_layout()
+            fig_loss.savefig(f"loss_dual_axis_lr_{lr}.png", dpi=300, bbox_inches="tight")
+            plt.close(fig_loss)
+
+
+            # Accuracy: single-axis
+            plt.figure()
+            plt.title(f"Accuracy: Train vs Validation (LR={lr})")
+            plt.plot(np.arange(1, ep+1), train_acc, label="Train")
+            plt.plot(np.arange(1, ep+1), val_acc, label="Validation")
+            plt.xlabel("Epochs")
+            plt.ylabel("Accuracy")
+            plt.legend()
+            plt.grid(True)
+            plt.savefig(f"accuracy_single_axis_lr_{lr}.png", dpi=300, bbox_inches="tight")
+            plt.close()
+
+
+            # Accuracy: dual-axis
+            fig_acc, ax1 = plt.subplots()
+            ax1.set_title(f"Accuracy: Train vs Validation (dual-axis) LR={lr}")
+            color = "tab:blue"
+            ax1.plot(np.arange(1, ep+1), train_acc, color=color, label="Train")
+            ax1.set_ylabel("Train Accuracy", color=color)
+            ax1.tick_params(axis='y', labelcolor=color)
+
+            ax2 = ax1.twinx()
+            color = "tab:orange"
+            ax2.plot(np.arange(1, ep+1), val_acc, color=color, label="Validation")
+            ax2.set_ylabel("Validation Accuracy", color=color)
+            ax2.tick_params(axis='y', labelcolor=color)
+
+            fig_acc.tight_layout()
+            fig_acc.savefig(f"accuracy_dual_axis_lr_{lr}.png", dpi=300, bbox_inches="tight")
+            plt.close(fig_acc)
+
 
             # Test
             if not test_on_multiple:
@@ -142,6 +227,14 @@ if __name__ == "__main__":
                     epoch=1
                 )
                 test_acc = test_results["mean_accuracy"]
+            
+            with open("grid_search_results.txt", "a") as f:
+                f.write("Test Results\n=======================================================\n")
+                for p, s, acc, loss in test_results["points"]:
+                    f.write(
+                        f"[TEST] p={int(p)}, s={s} | acc={acc:.4f}, loss={loss:.4f}\n"
+                    )
+                f.write(f"=======================================================\n\n")
 
             # Store results
             results.append({
@@ -150,6 +243,16 @@ if __name__ == "__main__":
                 "val_acc": val_acc[-1],
                 "test_acc": test_acc
             })
+
+        with open("grid_search_results.txt", "a") as f:
+            f.write("\n=== GRID SEARCH RESULTS ===")
+            for r in results:
+                f.write(
+                    f"LR={r['lr']:.4f} | "
+                    f"Train Acc={r['train_acc']:.4f} | "
+                    f"Val Acc={r['val_acc']:.4f} | "
+                    f"Test Acc={r['test_acc']:.4f}\n"
+                )
 
         # Print summary
         print("\n=== GRID SEARCH RESULTS ===")
@@ -161,6 +264,96 @@ if __name__ == "__main__":
                 f"Test Acc={r['test_acc']:.4f}"
             )
 
+    elif noise_grid_search:
+        print("=== Running NOISE GRID SEARCH (p, s) ===")
+
+        noise_results = []
+
+        for p in p_list:
+            for s in s_list:
+                print(f"\n--- Training with noise: p={p}, s={s} ---")
+
+                # Reload clean MNIST every run
+                train_images, train_y = load_mnist(data_dir, kind="train")
+                train_images = train_images.reshape(60_000, 784) / 255
+
+                # Apply noise
+                train_images, train_y, _ = add_noise_to_mnist(train_images, train_y, p, s)
+
+                train_labels = np.zeros((60_000, 10))
+                train_labels[np.arange(60_000), train_y] = 1
+
+                # Validation split
+                validation_subset = 5000
+                validation_images = train_images[:validation_subset]
+                validation_labels = train_labels[:validation_subset]
+                train_images = train_images[validation_subset:]
+                train_labels = train_labels[validation_subset:]
+
+                train_dataset = list(zip(train_images, train_labels))
+                validation_dataset = list(zip(validation_images, validation_labels))
+
+                train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+                validation_loader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=True)
+
+                train_dataset_size = len(train_dataset)
+                validation_dataset_size = len(validation_dataset)
+
+                # Fresh network each time
+                net = copy.deepcopy(neural_network)
+
+                # Train
+                train_acc, train_loss, val_acc, val_loss = train_network(
+                    net,
+                    train_loader,
+                    train_dataset_size,
+                    validation_loader,
+                    validation_dataset_size,
+                    learning_rate=learning_rate,
+                    epochs=epochs
+                )
+
+                best_val_acc = max(val_acc)
+
+                # Test on your multiple-noise benchmark
+                test_results = test_network(
+                    net,
+                    test_on_multiple=True,
+                    p_list=test_on_mult_p,
+                    s_list=test_on_mult_s,
+                    data_dir=str(data_dir),
+                    epoch=epochs
+                )
+
+                mean_test_acc = test_results["mean_accuracy"]
+                mean_test_loss = test_results["mean_loss"]
+
+                noise_results.append({
+                    "p": p,
+                    "s": s,
+                    "best_val_acc": best_val_acc,
+                    "mean_test_acc": mean_test_acc,
+                    "mean_test_loss": mean_test_loss
+                })
+
+                with open("noise_grid_search_results.txt", "a") as f:
+                    f.write(
+                        f"p={p}, s={s} | "
+                        f"Best Val Acc={best_val_acc:.4f} | "
+                        f"Mean Test Acc={mean_test_acc:.4f} | "
+                        f"Mean Test Loss={mean_test_loss:.4f}\n"
+                    )
+
+        # Summary
+        noise_results.sort(key=lambda x: x["best_val_acc"], reverse=True)
+
+        print("\n=== NOISE GRID SEARCH SUMMARY (sorted by validation accuracy) ===")
+        for r in noise_results:
+            print(
+                f"p={r['p']}, s={r['s']} | "
+                f"Best Val Acc={r['best_val_acc']:.4f} | "
+                f"Mean Test Acc={r['mean_test_acc']:.4f}"
+            )
     else:
         print("=== Running NORMAL training ===")
         train_acc, train_loss, val_acc, val_loss = train_network(
