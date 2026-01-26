@@ -8,7 +8,7 @@ from data_loader import DataLoader
 from models import NeuralNetwork
 from supplementary import Value, load_mnist, add_noise_to_mnist
 
-from train_and_test import train_network, test_network  # unified functions
+from train_and_test import train_network, test_network, train_and_test_p_s, proces_worker  # unified functions
 
 np.set_printoptions(precision=2)
 
@@ -30,13 +30,15 @@ data_dir = Path(__file__).resolve().parent / "data"
 
 batch_size = 32
 learning_rate = 0.0002 
-epochs = 20
+epochs = 2
 
 noise_grid_search = True
 grid_search = False  # toggle grid search
 
 p_list = np.arange(0, 100, 5)
 s_list = np.arange(0, 0.6, 0.03)
+# p_list = [0, 1]
+# s_list = [0]
 
 # ============================================================
 #                LOAD AND PREPROCESS TRAIN DATA
@@ -106,6 +108,7 @@ neural_network = NeuralNetwork(
 # ============================================================
 
 if __name__ == "__main__":
+    from multiprocessing import Process
 
     if grid_search:
         print("=== Running GRID SEARCH sequentially ===")
@@ -265,95 +268,18 @@ if __name__ == "__main__":
             )
 
     elif noise_grid_search:
-        print("=== Running NOISE GRID SEARCH (p, s) ===")
-
-        noise_results = []
-
+        processes = []
         for p in p_list:
             for s in s_list:
-                print(f"\n--- Training with noise: p={p}, s={s} ---")
-
-                # Reload clean MNIST every run
-                train_images, train_y = load_mnist(data_dir, kind="train")
-                train_images = train_images.reshape(60_000, 784) / 255
-
-                # Apply noise
-                train_images, train_y, _ = add_noise_to_mnist(train_images, train_y, p, s)
-
-                train_labels = np.zeros((60_000, 10))
-                train_labels[np.arange(60_000), train_y] = 1
-
-                # Validation split
-                validation_subset = 5000
-                validation_images = train_images[:validation_subset]
-                validation_labels = train_labels[:validation_subset]
-                train_images = train_images[validation_subset:]
-                train_labels = train_labels[validation_subset:]
-
-                train_dataset = list(zip(train_images, train_labels))
-                validation_dataset = list(zip(validation_images, validation_labels))
-
-                train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-                validation_loader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=True)
-
-                train_dataset_size = len(train_dataset)
-                validation_dataset_size = len(validation_dataset)
-
-                # Fresh network each time
-                net = copy.deepcopy(neural_network)
-
-                # Train
-                train_acc, train_loss, val_acc, val_loss = train_network(
-                    net,
-                    train_loader,
-                    train_dataset_size,
-                    validation_loader,
-                    validation_dataset_size,
-                    learning_rate=learning_rate,
-                    epochs=epochs
-                )
-
-                best_val_acc = max(val_acc)
-
-                # Test on your multiple-noise benchmark
-                test_results = test_network(
-                    net,
-                    test_on_multiple=True,
-                    p_list=test_on_mult_p,
-                    s_list=test_on_mult_s,
-                    data_dir=str(data_dir),
-                    epoch=epochs
-                )
-
-                mean_test_acc = test_results["mean_accuracy"]
-                mean_test_loss = test_results["mean_loss"]
-
-                noise_results.append({
-                    "p": p,
-                    "s": s,
-                    "best_val_acc": best_val_acc,
-                    "mean_test_acc": mean_test_acc,
-                    "mean_test_loss": mean_test_loss
-                })
-
-                with open("noise_grid_search_results.txt", "a") as f:
-                    f.write(
-                        f"p={p}, s={s} | "
-                        f"Best Val Acc={best_val_acc:.4f} | "
-                        f"Mean Test Acc={mean_test_acc:.4f} | "
-                        f"Mean Test Loss={mean_test_loss:.4f}\n"
-                    )
-
-        # Summary
-        noise_results.sort(key=lambda x: x["best_val_acc"], reverse=True)
-
-        print("\n=== NOISE GRID SEARCH SUMMARY (sorted by validation accuracy) ===")
-        for r in noise_results:
-            print(
-                f"p={r['p']}, s={r['s']} | "
-                f"Best Val Acc={r['best_val_acc']:.4f} | "
-                f"Mean Test Acc={r['mean_test_acc']:.4f}"
-            )
+                processes.append(Process(target=proces_worker, args = 
+                (p, 
+                s)))
+        for proc in processes:
+            proc.start()
+        for proc in processes:
+            proc.join()
+        
+        print("Done")
     else:
         print("=== Running NORMAL training ===")
         train_acc, train_loss, val_acc, val_loss = train_network(

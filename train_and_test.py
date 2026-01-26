@@ -247,8 +247,23 @@ def grid_worker(args):
         "test_acc": test_results["accuracy"],
     }
 
-def train_and_test_p_s(path, p, s, learning_rate = 0.0002, epochs = 20):
+def train_and_test_p_s(neural_network, data_dir, path, p, s, learning_rate = 0.0002, epochs = 20, batch_size = 32):
+    from pathlib import Path
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import copy
+    from scipy.interpolate import griddata
+    from activation_functions import logi, softmax
+    from data_loader import DataLoader
+    from models import NeuralNetwork
+    from supplementary import Value, load_mnist, add_noise_to_mnist
+
     print(f"\n--- Training with noise: p={p}, s={s} ---")
+
+    lr = learning_rate
+    ep = epochs
+
+    noise_results = {}
 
     # Reload clean MNIST every run
     train_images, train_y = load_mnist(data_dir, kind="train")
@@ -359,15 +374,16 @@ def train_and_test_p_s(path, p, s, learning_rate = 0.0002, epochs = 20):
     test_results = test_network(
         net,
         test_on_multiple=True,
-        p_list=test_on_mult_p,
-        s_list=test_on_mult_s,
+        p_list=[0, 25, 50, 75, 100],
+        s_list=[0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4],
         data_dir=str(data_dir),
-        epoch=epochs
-    )   
+        epoch=epochs,
+        plot_heatmap=False
+    )
 
     test_points_array = test_results["points"]
     test_mean_accuracy = test_results["mean_accuracy"]
-    test_mean_accuracy = test_results["mean_loss"]
+    test_mean_loss = test_results["mean_loss"]
 
     p_vals = test_points_array[:, 0]
     s_vals = test_points_array[:, 1]
@@ -383,27 +399,86 @@ def train_and_test_p_s(path, p, s, learning_rate = 0.0002, epochs = 20):
     plt.imshow(grid_acc, extent=(min(p_vals), max(p_vals), min(s_vals), max(s_vals)),
                 origin="lower", aspect="auto", cmap="viridis")
     plt.colorbar(label="Test Accuracy")
+    plt.plot(p, s, "ro", markersize=6)
     plt.xlabel("p")
     plt.ylabel("s")
     plt.title("Test Accuracy Heatmap")
-    plt.savefig(f"{path}/p={p}/plots/Test_accuracy_heatmap_p={p}_s={s}")
+    plt.savefig(f"{path}/p={p}/plots/Test_accuracy_heatmap_p={p}_s={s}.png")
     plt.close()
 
-    with open(f"{path}/p={p}/test_results.txt", "a") as f:
+    with open(f"{path}/p={p}/test_results_s={s}.txt", "a") as f:
         f.write("Test Results\n=======================================================\n")
-        for p, s, acc, loss in test_results["points"]:
+        for p1, s1, acc, loss in test_results["points"]:
             f.write(
-                f"[TEST] p={int(p)}, s={s} | acc={acc:.4f}, loss={loss:.4f}\n"
+                f"[TEST] p={int(p1)}, s={s1} | acc={acc:.4f}, loss={loss:.4f}\n"
             )
         f.write(f"=======================================================\n\n")
 
-    net.save(f"{path}/p={p}")
+    from pathlib import Path
+    save_path = Path(path) / "networks" / f"p={p}_s={s}"
+    save_path.mkdir(parents=True, exist_ok=True)  # make sure folder exists
+    net.save(save_path)
 
-    noise_results.append({
-        "p": p,
-        "s": s,
-        "points": test_points_array,
-        "test_mean_accuracy": test_mean_accuracy,
-        "test_mean_accuracy": test_mean_accuracy
-    })
 
+    return {
+    "p": p,
+    "s": s,
+    "points": test_points_array,
+    "test_mean_accuracy": test_mean_accuracy,
+    "test_mean_loss": test_mean_loss
+    } 
+
+def make_network():
+    from models import NeuralNetwork
+    from pathlib import Path
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import copy
+
+    from activation_functions import logi, softmax
+    from data_loader import DataLoader
+    from models import NeuralNetwork
+    from supplementary import Value, load_mnist, add_noise_to_mnist
+    return NeuralNetwork(
+        layers=[784, 256, 128, 64, 10],
+        activation_functions=[logi, logi, logi, softmax]
+    )
+
+
+def proces_worker(p, s, learning_rate=0.0002, epochs=1):
+    from pathlib import Path
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import copy
+    from scipy.interpolate import griddata
+    from activation_functions import logi, softmax
+    from data_loader import DataLoader
+    from models import NeuralNetwork
+    from supplementary import Value, load_mnist, add_noise_to_mnist
+
+    base_path = Path("noise_grid_search_results")
+    (base_path / f"p={p}" / "plots").mkdir(parents=True, exist_ok=True)
+
+    train_and_test_p_s(
+        neural_network=make_network(),
+        data_dir="data",
+        path=base_path,
+        p=p,
+        s=s,
+        learning_rate=learning_rate,
+        epochs=epochs
+    )
+
+
+    # Optional: global summary file
+    with open(base_path / "noise_grid_search_summary.txt", "w") as f:
+        f.write("p\ts\tMean Accuracy\tMean Loss\n")
+        for r in noise_results:
+            f.write(
+                f"{r['p']}\t{r['s']}\t"
+                f"{r['test_mean_accuracy']:.4f}\t"
+                f"{r['test_mean_loss']:.4f}\n"
+            )
+
+    print("\n=== NOISE GRID SEARCH COMPLETE ===")
+    print(f"All results saved in: {base_path.resolve()}")
