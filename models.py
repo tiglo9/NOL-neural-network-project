@@ -4,7 +4,7 @@ from supplementary import Value
 
 
 def weight_init_function(layer_size1: int, layer_size2: int):
-    return np.random.uniform(-1, 1, (layer_size1, layer_size2))
+    return np.random.randn(layer_size1, layer_size2) * np.sqrt(2 / layer_size1)
 
 
 def bias_init_function(layer_size: int):

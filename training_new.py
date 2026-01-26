@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import copy
 
-from activation_functions import logi, softmax
+from activation_functions import logi, softmax, relu
 from data_loader import DataLoader
 from models import NeuralNetwork
 from supplementary import Value, load_mnist, add_noise_to_mnist
@@ -19,7 +19,7 @@ np.set_printoptions(precision=2)
 train_on_noise = True
 test_on_noise = False
 
-train_noise_settings = (0, 0)
+train_noise_settings = (50, 0.1)
 test_noise_settings = (100, 0.2)
 
 test_on_multiple = True
@@ -28,9 +28,9 @@ test_on_mult_s = [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4]
 
 data_dir = Path(__file__).resolve().parent / "data"
 
-batch_size = 32
-learning_rate = 3e-3
-epochs = 2
+batch_size = 16
+learning_rate = 0.001
+epochs = 20
 
 grid_search = False  # toggle grid search
 
@@ -93,8 +93,8 @@ if not test_on_multiple:
 # ============================================================
 
 neural_network = NeuralNetwork(
-    layers=[784, 256, 128, 64, 10],
-    activation_functions=[logi, logi, logi, softmax]
+    layers=[784, 128, 64, 10],
+    activation_functions=[relu, relu, softmax]
 )
 
 # ============================================================
@@ -177,7 +177,7 @@ if __name__ == "__main__":
         #                    PLOTTING
         # ============================================================
 
-        epochs_range = np.arange(1, epochs + 1)
+        epochs_range = np.arange(1, len(train_loss) + 1)
 
         plt.figure()
         plt.title("Loss: Train vs Validation")

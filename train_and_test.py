@@ -70,6 +70,9 @@ def train_network(neural_network, train_loader, train_dataset_size,
 
         print(f"[VAL]   Acc: {validation_accuracies[-1]:.4f}, Loss: {validation_loss:.4f}\n")
 
+        if validation_accuracies[-1] >= 0.88:
+            break
+
     return train_accuracies, train_losses, validation_accuracies, validation_losses
 
 def test_network(
