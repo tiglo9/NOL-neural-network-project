@@ -70,6 +70,9 @@ def train_network(neural_network, train_loader, train_dataset_size,
 
         print(f"[VAL]   Acc: {validation_accuracies[-1]:.4f}, Loss: {validation_loss:.4f}\n")
 
+        # if validation_accuracies[-1] >= 0.88:
+        #     break
+
     return train_accuracies, train_losses, validation_accuracies, validation_losses
 
 def test_network(
@@ -459,7 +462,7 @@ def proces_worker(p, s, learning_rate=0.0002, epochs=1):
     base_path = Path("noise_grid_search_results")
     (base_path / f"p={p}" / "plots").mkdir(parents=True, exist_ok=True)
 
-    train_and_test_p_s(
+    result = train_and_test_p_s(
         neural_network=make_network(),
         data_dir="data",
         path=base_path,
@@ -468,17 +471,4 @@ def proces_worker(p, s, learning_rate=0.0002, epochs=1):
         learning_rate=learning_rate,
         epochs=epochs
     )
-
-
-    # Optional: global summary file
-    with open(base_path / "noise_grid_search_summary.txt", "w") as f:
-        f.write("p\ts\tMean Accuracy\tMean Loss\n")
-        for r in noise_results:
-            f.write(
-                f"{r['p']}\t{r['s']}\t"
-                f"{r['test_mean_accuracy']:.4f}\t"
-                f"{r['test_mean_loss']:.4f}\n"
-            )
-
-    print("\n=== NOISE GRID SEARCH COMPLETE ===")
-    print(f"All results saved in: {base_path.resolve()}")
+    

@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import copy
 
-from activation_functions import logi, softmax
+from activation_functions import logi, softmax, relu
 from data_loader import DataLoader
 from models import NeuralNetwork
 from supplementary import Value, load_mnist, add_noise_to_mnist
@@ -19,7 +19,7 @@ np.set_printoptions(precision=2)
 train_on_noise = True
 test_on_noise = False
 
-train_noise_settings = (0, 0)
+train_noise_settings = (50, 0.1)
 test_noise_settings = (100, 0.2)
 
 test_on_multiple = True
@@ -35,10 +35,10 @@ epochs = 2
 noise_grid_search = True
 grid_search = False  # toggle grid search
 
-p_list = np.arange(0, 100, 5)
-s_list = np.arange(0, 0.6, 0.03)
-# p_list = [0, 1]
-# s_list = [0]
+# p_list = np.arange(0, 100, 5)
+# s_list = np.arange(0, 0.6, 0.03)
+p_list = [0, 1]
+s_list = [0]
 
 # ============================================================
 #                LOAD AND PREPROCESS TRAIN DATA
@@ -99,8 +99,8 @@ if not test_on_multiple:
 # ============================================================
 
 neural_network = NeuralNetwork(
-    layers=[784, 256, 128, 64, 10],
-    activation_functions=[logi, logi, logi, softmax]
+    layers=[784, 128, 64, 10],
+    activation_functions=[relu, relu, softmax]
 )
 
 # ============================================================
@@ -280,6 +280,19 @@ if __name__ == "__main__":
             proc.join()
         
         print("Done")
+        # base_path = Path("noise_grid_search_results")
+        # # Optional: global summary file
+        # with open(base_path / "noise_grid_search_summary.txt", "w") as f:
+        #     f.write("p\ts\tMean Accuracy\tMean Loss\n")
+        #     for r in noise_results:
+        #         f.write(
+        #             f"{r['p']}\t{r['s']}\t"
+        #             f"{r['test_mean_accuracy']:.4f}\t"
+        #             f"{r['test_mean_loss']:.4f}\n"
+        #         )
+
+        # print("\n=== NOISE GRID SEARCH COMPLETE ===")
+        # print(f"All results saved in: {base_path.resolve()}")
     else:
         print("=== Running NORMAL training ===")
         train_acc, train_loss, val_acc, val_loss = train_network(
@@ -296,7 +309,7 @@ if __name__ == "__main__":
         #                    PLOTTING
         # ============================================================
 
-        epochs_range = np.arange(1, epochs + 1)
+        epochs_range = np.arange(1, len(train_loss) + 1)
 
         plt.figure()
         plt.title("Loss: Train vs Validation")
